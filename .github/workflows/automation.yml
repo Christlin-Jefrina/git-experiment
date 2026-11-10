@@ -1,0 +1,46 @@
+name: Scheduled CI CD Automation
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    - cron: '0 * * * *'
+permissions:
+  contents: read
+  issues: write
+jobs:
+  automate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      - name: Run Automation
+        run: python3 automation.py
+      - name: Test Automation
+        id: test
+        continue-on-error: true
+        run: python3 test_job.py
+      - name: Generate Report
+        if: always()
+        run: python3 report.py
+      - name: Upload Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: automation-report
+          path: |
+            result.txt
+            report.txt
+          if-no-files-found: warn
+      - name: Update Agile Issue
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TEST_RESULT: ${{ steps.test.outcome }}
+        run: |
+          if [ "$TEST_RESULT" = "success" ]; then
+            STATUS="Done"
+          else
+            STATUS="In Progress - Failed"
+          fi
+          gh issue comment 1 --body "CI/CD Status: $STATUS"
